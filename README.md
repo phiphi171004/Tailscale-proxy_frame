@@ -7,7 +7,7 @@ Cấu hình mẫu Dockerfile tích hợp **Tailscale** trên **Render.com** đ�
 ## 1. CÁC FILE TRONG REPO
 * **`Dockerfile`**: Tải và cài đặt Tailscale chính thức trên nền Linux slim container.
 * **`start.sh`**: Script khởi động `tailscaled` ở chế độ userspace (dành cho container Render), tự động xác thực Auth Key và chạy ứng dụng web.
-* **`server.js`**: Web server HTTP tích hợp sẵn để Render pass Health Check (cổng 10000).
+* **`server.js`**: Web server HTTP tích hợp sẵn endpoint Health Check (`/health`) hỗ trợ method **HEAD** và **GET** phục vụ UptimeRobot chống Render sleep.
 * **`package.json`**: Cấu hình khởi động Node.js.
 
 ---
@@ -33,7 +33,18 @@ Cấu hình mẫu Dockerfile tích hợp **Tailscale** trên **Render.com** đ�
 
 ---
 
-## 3. SỬ DỤNG PROXY TRÊN RENDER
+## 3. CẤU HÌNH UPTIMEROBOT (CHỐNG RENDER NGỦ 15 PHÚT)
+Render gói miễn phí sẽ tự động "ngủ" nếu không có request trong 15 phút. Bạn dùng UptimeRobot ping định kỳ:
+* **URL:** `https://ten-app-cua-ban.onrender.com/health`
+* **Monitoring Type:** `HTTP(s)`
+* **HTTP Method:** `HEAD` (hoặc `GET`)
+* **Monitoring Interval:** `5 minutes` (hoặc `10 minutes`)
+
+Endpoint `/health` đã được tối ưu siêu nhẹ, trả về `200 OK` ngay lập tức mà không tốn tài nguyên server.
+
+---
+
+## 4. SỬ DỤNG PROXY TRÊN RENDER
 Sau khi Render deploy thành công, container sẽ nằm cùng mạng nội bộ ảo với máy tính của bạn:
 * IP Tailscale máy tính nhà bạn: `100.97.70.3`
 * Danh sách proxy xuất từ Proxy Farm:
