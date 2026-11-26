@@ -1,57 +1,54 @@
-# Tailscale-proxy_frame
+# RENDER PROXY BRIDGE FOR PROXY FARM
 
-Cấu hình mẫu Dockerfile tích hợp **Tailscale** trên **Render.com** để ứng dụng đám mây có thể kết nối trực tiếp, ổn định về dàn 54 proxy 4G tại máy tính cá nhân ở nhà mà không cần mở cổng modem mạng gia đình.
-
----
-
-## 1. CÁC FILE TRONG REPO
-* **`Dockerfile`**: Tải và cài đặt Tailscale chính thức trên nền Linux slim container.
-* **`start.sh`**: Script khởi động `tailscaled` ở chế độ userspace (dành cho container Render), tự động xác thực Auth Key và chạy ứng dụng web.
-* **`server.js`**: Web server HTTP tích hợp sẵn endpoint Health Check (`/health`) hỗ trợ method **HEAD** và **GET** phục vụ UptimeRobot chống Render sleep.
-* **`package.json`**: Cấu hình khởi động Node.js.
+Cổng kết nối Proxy công khai trên **Render.com** kết nối trực tiếp với dàn proxy **Proxy Farm** trên máy tính của bạn.
+Cho phép mang dàn proxy ra ngoài Internet để dùng cho Tool bot, web check proxy, hoặc bất kỳ máy nào khác mà **không cần mở port modem**.
 
 ---
 
-## 2. HƯỚNG DẪN TRIỂN KHAI TRÊN RENDER.COM
-
-### Bước 1: Lấy Auth Key từ Tailscale
-1. Truy cập [login.tailscale.com/admin/settings/keys](https://login.tailscale.com/admin/settings/keys)
-2. Bấm **Generate auth key...**
-3. Tích chọn:
-   * **Reusable** (để khi Render redeploy hoặc restart vẫn tự kết nối lại)
-   * **Ephemeral** (để tự động xóa device khỏi danh sách khi container tắt)
-4. Bấm **Generate key** và sao chép mã (dạng `tskey-auth-kxxxxxxxxxxxx`).
-
-### Bước 2: Deploy lên Render
-1. Mở [dashboard.render.com](https://dashboard.render.com), chọn **New +** -> **Web Service**.
-2. Chọn kết nối với repository này: `phiphi171004/Tailscale-proxy_frame`.
-3. Render sẽ tự động nhận diện `Dockerfile`.
-4. Ở mục **Environment Variables**, bấm **Add Environment Variable**:
-   * **Key**: `TAILSCALE_AUTHKEY`
-   * **Value**: Dán mã Auth Key bạn vừa tạo ở Bước 1.
-5. Bấm **Create Web Service**.
+## 1. CƠ CHẾ HOẠT ĐỘNG
+* **Cổng công khai**: `https://ten-app-cua-ban.onrender.com:443`
+* **Hỗ trợ định tuyến 50+ cổng**: Chỉ cần điền số cổng vào ô `Username` (vd: `port29001`, `port29002`...).
+* **Hỗ trợ 2 chế độ kết nối về máy tính**:
+  1. **Chế độ 1 (WebSocket Bridge - Khuyên dùng)**: Chạy file `bat-dau-bridge.bat` trên máy tính. Kết nối thẳng tới Render qua HTTPS WebSocket. **Không cần cài bất kỳ phần mềm nào vào Windows**.
+  2. **Chế độ 2 (Tailscale)**: Nếu máy tính có cài Tailscale, Render tự động forward qua mạng ảo Tailscale (IP `100.97.70.3`).
 
 ---
 
-## 3. CẤU HÌNH UPTIMEROBOT (CHỐNG RENDER NGỦ 15 PHÚT)
-Render gói miễn phí sẽ tự động "ngủ" nếu không có request trong 15 phút. Bạn dùng UptimeRobot ping định kỳ:
+## 2. TRIỂN KHAI LÊN RENDER.COM
+1. Vào Dashboard Render.com, chọn Web Service của bạn (liên kết với repo này).
+2. Render sẽ tự động build từ `Dockerfile`.
+3. Cấu hình biến môi trường (Environment Variables) trên Render:
+   * `PORT`: `10000` (mặc định của Render).
+   * `BRIDGE_SECRET`: Mật khẩu bảo vệ kết nối giữa máy tính và Render (mặc định: `proxy-farm-secret`).
+   * `LOCAL_PROXY_USER`: `proxy` (tên đăng nhập proxy trên máy bạn).
+   * `LOCAL_PROXY_PASS`: (mật khẩu proxy trên máy bạn).
+4. Bấm **Deploy**.
+
+---
+
+## 3. CẤU HÌNH UPTIMEROBOT (CHỐNG RENDER NGỦ ĐÔNG)
+Render gói Free sẽ ngủ nếu không có request trong 15 phút. Cấu hình trên UptimeRobot:
 * **URL:** `https://ten-app-cua-ban.onrender.com/health`
 * **Monitoring Type:** `HTTP(s)`
 * **HTTP Method:** `HEAD` (hoặc `GET`)
-* **Monitoring Interval:** `5 minutes` (hoặc `10 minutes`)
-
-Endpoint `/health` đã được tối ưu siêu nhẹ, trả về `200 OK` ngay lập tức mà không tốn tài nguyên server.
+* **Interval:** `5 minutes`
 
 ---
 
-## 4. SỬ DỤNG PROXY TRÊN RENDER
-Sau khi Render deploy thành công, container sẽ nằm cùng mạng nội bộ ảo với máy tính của bạn:
-* IP Tailscale máy tính nhà bạn: `100.97.70.3`
-* Danh sách proxy xuất từ Proxy Farm:
-  ```text
-  100.97.70.3:29001:proxy:8SJFhRS3gITP
-  100.97.70.3:29002:proxy:8SJFhRS3gITP
-  ...
-  100.97.70.3:29054:proxy:8SJFhRS3gITP
-  ```
-* Kết nối P2P mã hóa WireGuard tốc độ cao, không gián đoạn, cố định cổng 100%.
+## 4. CÁCH SỬ DỤNG TRÊN TOOL & WEB CHECK PROXY
+Trong Tool bot hoặc các trang web check proxy:
+* **Loại proxy:** `HTTP Proxy`
+* **Host:** `ten-app-cua-ban.onrender.com`
+* **Port:** `443`
+* **User:** `port29001` (hoặc `port29002`, `port29003`... tùy luồng bạn muốn chọn)
+* **Pass:** Mật khẩu proxy của bạn
+
+Ví dụ danh sách xuất ra:
+```text
+ten-app-cua-ban.onrender.com:443:port29001:matkhau
+ten-app-cua-ban.onrender.com:443:port29002:matkhau
+ten-app-cua-ban.onrender.com:443:port29003:matkhau
+...
+```
+
+Toàn bộ 50 luồng sẽ chạy song song đồng thời, được Render chuyển tiếp chuẩn xác về từng VPN trên máy của bạn.
